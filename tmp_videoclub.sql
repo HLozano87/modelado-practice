@@ -1,8 +1,8 @@
-DROP SCHEMA IF EXISTS hlozano_practice cascade;
+DROP SCHEMA IF EXISTS hlozano_videoclub cascade;
 
-CREATE SCHEMA hlozano_practice;
+CREATE SCHEMA hlozano_videoclub;
 
-SET SCHEMA 'hlozano_practice';
+SET SCHEMA 'hlozano_videoclub';
 
 CREATE TABLE tmp_videoclub (
 	id_copia int4 NULL,
@@ -645,7 +645,7 @@ inner join socios s on s.dni = t.dni;
  *select * from socios
  *inner join direccion d on socios.id = d.id_socio 
  *order by socios.id;
-
+*/
 
 insert into peliculas (titulo, director, genero, sinopsis)
 select distinct titulo, director, genero, sinopsis from tmp_videoclub order by tmp_videoclub.titulo;
