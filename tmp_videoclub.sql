@@ -35,6 +35,7 @@ create table socios (
 	apellido_1 varchar(50) not null,
 	apellido_2 varchar(50) not null,
 	telefono varchar (10) not null,
+	email varchar (60) not null,
 	fecha_nacimiento date not null
 );
 
@@ -53,21 +54,24 @@ create table direccion (
 create table peliculas (
 	id serial primary key,
 	titulo varchar(80) not null,
-	director varchar(80) not null,
-	genero varchar(50) not null,
+	id_genero integer not null,
+	id_director integer not null,
 	sinopsis text not null	
 );
 
 create table genero (
 	id serial primary key,
-	id_pelicula integer null,
-	tipo varchar(50) null
+	tipo varchar(50) not null
+);
+
+create table director (
+	id serial primary key,
+	nombre varchar(50) not null
 );
 
 create table copia_pelicula (
 	id serial primary key,
-	id_pelicula integer not null,
-	cantidad_de_copias integer
+	id_pelicula integer not null
 );
 
 create table prestamos (
@@ -83,16 +87,20 @@ add constraint id_socio_fk
 foreign key (id_socio)
 references socios(id) on delete cascade;
 
+alter table peliculas
+add constraint id_genero_fk
+foreign key (id_genero)
+references genero(id);
 
-alter table genero
-add constraint id_pelicula_fk
-foreign key (id_pelicula)
-references peliculas(id);
+alter table peliculas
+add constraint id_director_fk
+foreign key (id_director)
+references director(id);
 
 alter table copia_pelicula
 add constraint id_pelicula_fk
 foreign key (id_pelicula)
-references peliculas(id);
+references peliculas(id) on delete cascade;
 
 alter table prestamos
 add constraint id_socio_fk
@@ -106,7 +114,7 @@ references copia_pelicula(id);
 
 
 create unique index dni_sin_repetir on socios (lower(dni));
-create unique index pelicula_sin_repetir on peliculas (lower(titulo), lower(director), lower(sinopsis));
+create unique index pelicula_sin_repetir on peliculas (lower(titulo));
 
 
 INSERT INTO tmp_videoclub (id_copia,fecha_alquiler_texto,dni,nombre,apellido_1,apellido_2,email,telefono,codigo_postal,fecha_nacimiento,numero,piso,letra,calle,ext,titulo,genero,sinopsis,director,fecha_alquiler,fecha_devolucion) VALUES
@@ -629,82 +637,65 @@ INSERT INTO tmp_videoclub (id_copia,fecha_alquiler_texto,dni,nombre,apellido_1,a
 	 (308,'2024-01-25','1638778M','Angel','Lorenzo','Caballero','angel.lorenzo.caballero@gmail.com','698073069','47008','2011-07-30','82','1','Izq.','Sol','1Izq.','El bazar de las sorpresas','Comedia','Alfred Kralik es el tímido jefe de vendedores de Matuschek y Compañía, una tienda de Budapest. Todas las mañanas, los empleados esperan juntos la llegada de su jefe, Hugo Matuschek. A pesar de su timidez, Alfred responde al anuncio de un periódico y mantiene un romance por carta. Su jefe decide contratar a una tal Klara Novak en contra de la opinión de Alfred. En el trabajo, Alfred discute constantemente con ella, sin sospechar que es su corresponsal secreta.','Ernst Lubitsch','2024-01-25',NULL);
 
 
-insert into socios (dni, nombre, apellido_1, apellido_2, telefono, fecha_nacimiento) 
-select distinct dni, nombre, apellido_1, apellido_2, telefono, cast(fecha_nacimiento as date) 
-from tmp_videoclub;
-
-select * from socios order by nombre asc;
-
+insert into socios (dni, nombre, apellido_1, apellido_2, telefono, email, fecha_nacimiento) 
+select distinct dni, nombre, apellido_1, apellido_2, telefono, email, cast(fecha_nacimiento as date) 
+from tmp_videoclub
+order by nombre;
 
 insert into direccion (id_socio, calle, numero, piso, letra, codigo_postal, ext)
 select distinct s.id, t.calle, cast(t.numero as integer), t.piso, t.letra, cast(t.codigo_postal as integer), t.ext
 from tmp_videoclub t
 inner join socios s on s.dni = t.dni;
 
-/*
- *select * from socios
- *inner join direccion d on socios.id = d.id_socio 
- *order by socios.id;
-*/
+insert into genero (tipo)
+select distinct genero
+from tmp_videoclub t;
 
-insert into peliculas (titulo, director, genero, sinopsis)
-select distinct titulo, director, genero, sinopsis from tmp_videoclub order by tmp_videoclub.titulo;
+insert into director(nombre)
+select distinct director from tmp_videoclub t;
 
-select * from peliculas;
-
-insert into genero (id_pelicula, tipo)
-select id, genero
-from peliculas;
+insert into peliculas (titulo, sinopsis, id_genero, id_director)
+select distinct titulo, sinopsis, g.id, d.id from tmp_videoclub t
+inner join genero g on g.tipo = t.genero
+inner join director d on d.nombre = t.director;
 
 
-insert into copia_pelicula (id_pelicula, cantidad_de_copias)
-select p.id, count(*)
+insert into copia_pelicula (id, id_pelicula)
+select distinct id_copia, p.id
 from tmp_videoclub t
-inner join peliculas p on t.titulo = p.titulo and t.director = p.director and t.sinopsis = p.sinopsis
-group by p.id;
+inner join peliculas p on p.titulo = t.titulo;
 
-select * from copia_pelicula;
 
 insert into prestamos (id_socio, id_copia, fecha_alquiler, fecha_devolucion)
-select s.id id_socio, c.id id_copia, t.fecha_alquiler, t.fecha_devolucion from tmp_videoclub t
-left join socios s on t.dni = s.dni
-left join copia_pelicula c on c.id_pelicula = (
-	select id from peliculas where titulo = t.titulo
-);
+select s.id id_socio, id_copia, t.fecha_alquiler, t.fecha_devolucion from tmp_videoclub t
+inner join socios s on t.dni = s.dni
+order by id_copia;
 
-select * from prestamos;
 
-create view stock_total as
-select sum(cantidad_de_copias + 1 ) total_copias 
-from copia_pelicula;
+/*
+ * drop table tmp_videoclub;
+ */
 
-select * from stock_total;
+create view lista_socios as 
+select nombre, concat(apellido_1, ' ' ,apellido_2) apellidos, telefono, email from socios;
 
-create view cantidad_por_copia as
-select 
-	p.titulo titulos,
-	sum(c.cantidad_de_copias) cantidad_de_copias
-from peliculas p
-inner join copia_pelicula c on p.id = c.id_pelicula
-group by p.titulo;
-
-select * from cantidad_por_copia;
-
+create view lista_direccion as
+select id_socio, calle, numero, ext, codigo_postal from direccion order by codigo_postal;
 
 create view peliculas_disponibles as 
 select 
-	p.id id_pelicula,
-	p.titulo,
-	(select count(*) stock
-	from copia_pelicula c
-	left join prestamos pr on pr.id_copia = c.id
-	where c.id_pelicula = p.id
-	and (pr.fecha_devolucion is not null))
+	p.id id_pelicula, 
+	p.titulo, 
+	count(c.id) stock_disponible
 from peliculas p
-group by id_pelicula, p.titulo
-order by stock asc;
+inner join copia_pelicula c on p.id = c.id_pelicula
+left join prestamos pr on c.id = pr.id_copia
+and pr.fecha_alquiler is not null
+and pr.fecha_devolucion is null
+where pr.id is null
+group by p.id, p.titulo
+order by stock_disponible desc;
 
-select * from peliculas_disponibles;
 
 create view peliculas_prestadas as 
 select 
@@ -713,10 +704,8 @@ select
 	p.titulo,
 	pr.fecha_alquiler
 from peliculas p
-left join copia_pelicula c on p.id = c.id_pelicula
+inner join copia_pelicula c on p.id = c.id_pelicula
 left join prestamos pr on pr.id_copia = c.id
 where pr.fecha_devolucion is null
 order by pr.id_socio;
-
-select * from peliculas_prestadas;
 
